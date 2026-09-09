@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dc_field
 from typing import Dict, List, Optional
 
+from . import VIEW_SCHEMA_VERSION
 from .lexer import lex_macro
 from .model import Region, Resource
 
@@ -214,6 +215,7 @@ def build_bms_lineage(mapsets: List[Mapset]) -> dict:
     rows.sort(key=lambda r: (r["mapset"], r["map"], r["line"]))
     return {
         "format": "cics-dependencies-bms",
+        "formatVersion": VIEW_SCHEMA_VERSION,
         "sources": sorted({m.source_name for m in mapsets}),
         "note": (
             "Every BMS field, with its screen position and the COBOL data names DFHMSD "
