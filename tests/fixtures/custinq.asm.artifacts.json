@@ -1,0 +1,143 @@
+{
+  "format": "asm-dependencies-artifacts",
+  "program": "CUSTINQ",
+  "source": "custinq.asm",
+  "note": "One row per artifact this module is related to: modules it calls or loads (dependency: runtime), ddnames it opens (runtime - the JCL DD statement says which dataset each is), and COPY members and macros (compile-time: assembled into the source before it can be read at all). 'evidence' says how the name was established - 'literal' means it is a token in the statement, 'assigned' means a DC initialises the field the operand names and no store into it reaches the site, 'table' means the name is one of a set of constants selected at run time, and 'dynamic' means it is computed at run time and is not in this source. A row marked 'conditional' sits inside an AIF branch this tool could not decide, and 'condition' names the test - supply --sysparm to decide it. 'provides' is what this module can be called AS, which is the other half of the call graph. 'candidates' are names a site COULD reach - a dispatch table's entries, say - kept out of 'artifacts' because which one a run reaches is control flow rather than text, and reported here because a module whose every call is table-driven would otherwise have an empty manifest.",
+  "provides": [
+    {
+      "name": "CUSTINQ",
+      "kind": "csect",
+      "entryPoint": true
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact": "CUSTVAL",
+      "kind": "program",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": null,
+      "needs": "none - the load-module name is the estate-wide identity; which library supplies it is decided by the SYSLIB concatenation at bind time, not here",
+      "linkage": [
+        "EXEC CICS LINK"
+      ],
+      "touchedBy": [
+        {
+          "line": 17
+        }
+      ],
+      "evidence": "literal"
+    },
+    {
+      "artifact": "CUSTMAST",
+      "kind": "file",
+      "dependency": "runtime",
+      "identity": "program-local",
+      "resolvedBy": "the CICS FILE definition (FCT/CSD)",
+      "needs": "the CICS FILE definition that binds this name to a VSAM dataset - unlike a batch ddname, a CICS file is named in the CSD rather than in JCL",
+      "subsystem": "CICS",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 13,
+          "verb": "EXEC CICS READ"
+        }
+      ],
+      "io": "read"
+    },
+    {
+      "artifact": "PRODDB.CUSTOMER",
+      "kind": "db2-table",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": "the DDL or DCLGEN that declares it",
+      "needs": "none - a qualified table name is the catalog-global identity; an unqualified one is completed by the bind's QUALIFIER, not here",
+      "subsystem": "Db2",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 11,
+          "verb": "EXEC SQL"
+        }
+      ],
+      "io": "read"
+    },
+    {
+      "artifact": "CUSTM02",
+      "kind": "terminal-map",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": "the BMS mapset the map belongs to",
+      "needs": "the BMS macro source (DFHMSD/DFHMDI/DFHMDF) - the mapset is a load module, and its symbolic map is a separate copybook",
+      "subsystem": "CICS",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 21,
+          "verb": "EXEC CICS SEND"
+        }
+      ],
+      "evidenceNote": "no MAPSET was given, so the mapset is the name in MAP() - which is the load module"
+    },
+    {
+      "artifact": "CUSTSET",
+      "kind": "terminal-map",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": "the BMS mapset the map belongs to",
+      "needs": "the BMS macro source (DFHMSD/DFHMDI/DFHMDF) - the mapset is a load module, and its symbolic map is a separate copybook",
+      "subsystem": "CICS",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 8,
+          "verb": "EXEC CICS RECEIVE"
+        }
+      ]
+    },
+    {
+      "artifact": "CINQ",
+      "kind": "cics-transaction",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": "the CICS TRANSACTION definition (CSD)",
+      "needs": "the CSD entry that says which program this transaction runs",
+      "subsystem": "CICS",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 22,
+          "verb": "EXEC CICS RETURN"
+        }
+      ]
+    },
+    {
+      "artifact": "CUSTLOG",
+      "kind": "queue",
+      "dependency": "runtime",
+      "identity": "global",
+      "resolvedBy": "the CICS TSMODEL or TDQUEUE definition (CSD)",
+      "needs": "the CSD entry - a TD queue often has a real dataset behind it, and a TS queue may be shared across regions",
+      "subsystem": "CICS",
+      "evidence": "literal",
+      "touchedBy": [
+        {
+          "line": 14,
+          "verb": "EXEC CICS WRITEQ TS"
+        }
+      ],
+      "io": "write"
+    }
+  ],
+  "candidates": [],
+  "excluded": [
+    {
+      "name": "DFHEIENT",
+      "kind": "macro",
+      "reason": "provided by CICS - an IBM runtime entry point, so there is no application source to retrieve"
+    }
+  ],
+  "flags": [
+    "line 5: DFHEIENT is a CICS macro and was not retrieved - it generates CICS runtime code rather than this shop's calls, so the gap is narrower than an unresolved site macro, but it is still a gap"
+  ]
+}

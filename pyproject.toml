@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cics-dependencies"
+version = "0.1.0"
+description = "Parse IBM CICS resource definitions (CSD, table macro decks, SIT, BAS, bundles): which program a transaction runs, which dataset a CICS file binds, which queue write starts a task, and what is actually installed."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Paul Howard" }]
+keywords = ["cics", "csd", "mainframe", "modernization", "dependencies", "parser"]
+
+# Core ONLY - never cobol-xstate, never jcl-dependencies, never eztrieve-dependencies,
+# never asm-dependencies. The COBOL says what a program does, the JCL says which dataset a
+# batch ddname is, the Easytrieve says which bytes become which, the assembler says what a
+# module calls, and this says what the region wires those names to. Five peers that meet at
+# plain manifest dicts. tests/test_boundaries.py enforces it.
+dependencies = ["mainframe-artifacts>=0.1,<0.2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+cics-dependencies = "cics_dependencies.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put the src/ layout on sys.path so `python -m pytest` works without installing the
+# package (pytest >= 7). mainframe-artifacts arrives installed or via the sibling
+# mainframe-common checkout (tests/_mainframe_common.py; override MAINFRAME_COMMON_REPO).
+pythonpath = ["src", "tests"]

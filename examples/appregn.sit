@@ -1,0 +1,17 @@
+*** APPREGN - a SIT override deck written for this repository.
+***
+*** Supplied to a run, this is what turns every resource's `installed` from `unknown`
+*** into a real answer. Without it every row says `unknown`, which is the honest default
+*** and not a failure.
+APPLID=CICSAPP1
+SYSIDNT=APP1
+GRPLIST=(APPLIST,DFHLIST)
+GMTRAN=APMN
+PLTPI=PI
+PLTSD=SD
+XLT=SD
+MXT=200
+DSALIM=5M
+SEC=YES
+START=AUTO
+.END

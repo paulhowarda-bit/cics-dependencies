@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Tooling
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Claude Code (personal, per-developer settings)
+.claude/settings.json
+.claude/settings.local.json
+
+# Generated output. A run writes everything into --outdir, which defaults to ./out.
+out/
+# ...and these cover a run pointed somewhere else, e.g. --outdir .
+*.csd.artifacts.json
+*.csd.lineage.json
+*.csd.prefetch.json
+*.csd.fetch.json
+
+# The public validation corpus. Third-party material (Apache 2.0), downloaded by
+# tools/fetch_corpus.py rather than vendored: a committed copy rots, and the licences are
+# not this repository's to re-ship. tests/test_corpus.py skips cleanly when it is absent.
+corpus/
+
+# NOTE: goldens/, examples/ and tests/fixtures/ are deliberately NOT ignored. The goldens
+# are the byte-stability ratchet, and a committed sibling manifest is this repository's
+# half of a cross-repository contract - both are worthless if they are not tracked.

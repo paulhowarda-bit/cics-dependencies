@@ -1,0 +1,365 @@
+{
+  "format": "jcl-dependencies-lineage",
+  "job": "CICSAPP1",
+  "isProc": false,
+  "source": "cicsapp1.jcl",
+  "note": "Job-level dataflow. Each step lists its inputs and outputs (DDs resolved to datasets); 'dataflow' is the producer->consumer edges across steps that no single-program view can see (step 1 writes a dataset step 2 reads). 'fieldLineage' is byte-field lineage from a utility control card: each output record field traced to the input bytes it copies (SORT BUILD/OUTREC), plus the filter (INCLUDE/OMIT COND) that decides which records survive. A DSN with a GDG relative generation is keyed on its base (the stable identity) with the generation recorded. 'conditions' on a step (and on the dataflow edges and ddBindings it contributes) say when it actually runs: 'if' is the IF/THEN/ELSE nesting (every test must hold, negated=true for an ELSE branch), 'cond' is the parsed COND= with its BYPASS sense spelt out ('runsWhen' is the negation a reader wants - COND is the back-to-front one). Nothing is invented - unresolved symbolics/PROCs and ambiguous OLD/I-O directions are in 'flags'. Where a step runs a COBOL program this tool analyses, the DD ddname is the join to that program's own interface/lineage: this view supplies the dataset its ddname was missing.",
+  "steps": [
+    {
+      "step": "CICS",
+      "program": "DFHSIP",
+      "inputs": [
+        {
+          "ddname": "STEPLIB",
+          "io": "input",
+          "dataset": "CICSTS.SDFHAUTH",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHRPL",
+          "io": "input",
+          "dataset": "PROD.APP.LOADLIB",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHCSD",
+          "io": "input",
+          "dataset": "CICSTS.CICSAPP1.DFHCSD",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHTEMP",
+          "io": "input",
+          "dataset": "CICSTS.CICSAPP1.DFHTEMP",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHINTRA",
+          "io": "input",
+          "dataset": "CICSTS.CICSAPP1.DFHINTRA",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHAUXT",
+          "io": "input",
+          "dataset": "CICSTS.CICSAPP1.DFHAUXT",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "DFHLCD",
+          "io": "input",
+          "dataset": "CICSTS.CICSAPP1.DFHLCD",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "CUSTMAS",
+          "io": "input",
+          "dataset": "PROD.CUSTOMER.MASTER",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "RATETAB",
+          "io": "input",
+          "dataset": "PROD.RATE.TABLE",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "APPRPT",
+          "io": "input",
+          "dataset": "PROD.APP.REPORT",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "LEGACYF",
+          "io": "input",
+          "dataset": "PROD.LEGACY.FILE",
+          "disp": [
+            "SHR"
+          ],
+          "kind": "dataset"
+        },
+        {
+          "ddname": "SYSIN",
+          "io": "input",
+          "kind": "instream"
+        }
+      ],
+      "outputs": [
+        {
+          "ddname": "DFHCXRF",
+          "io": "output",
+          "kind": "spool",
+          "sysout": "*"
+        },
+        {
+          "ddname": "MSGUSR",
+          "io": "output",
+          "kind": "spool",
+          "sysout": "*"
+        }
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "dsn": "CICSTS.CICSAPP1.DFHAUXT",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHAUXT",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "CICSTS.CICSAPP1.DFHCSD",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHCSD",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "CICSTS.CICSAPP1.DFHINTRA",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHINTRA",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "CICSTS.CICSAPP1.DFHLCD",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHLCD",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "CICSTS.CICSAPP1.DFHTEMP",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHTEMP",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "CICSTS.SDFHAUTH",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "STEPLIB",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "PROD.APP.LOADLIB",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "DFHRPL",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "PROD.APP.REPORT",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "APPRPT",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "PROD.CUSTOMER.MASTER",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "CUSTMAS",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "PROD.LEGACY.FILE",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "LEGACYF",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    },
+    {
+      "dsn": "PROD.RATE.TABLE",
+      "producedBy": [],
+      "consumedBy": [
+        {
+          "step": "CICS",
+          "ddname": "RATETAB",
+          "disp": "SHR"
+        }
+      ],
+      "temporary": false,
+      "intermediate": false
+    }
+  ],
+  "dataflow": [],
+  "fieldLineage": [
+    {
+      "step": "CICS",
+      "utility": "unknown"
+    }
+  ],
+  "ddBindings": [
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "STEPLIB",
+      "dataset": "CICSTS.SDFHAUTH",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHRPL",
+      "dataset": "PROD.APP.LOADLIB",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHCSD",
+      "dataset": "CICSTS.CICSAPP1.DFHCSD",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHTEMP",
+      "dataset": "CICSTS.CICSAPP1.DFHTEMP",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHINTRA",
+      "dataset": "CICSTS.CICSAPP1.DFHINTRA",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHAUXT",
+      "dataset": "CICSTS.CICSAPP1.DFHAUXT",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "DFHLCD",
+      "dataset": "CICSTS.CICSAPP1.DFHLCD",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "CUSTMAS",
+      "dataset": "PROD.CUSTOMER.MASTER",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "RATETAB",
+      "dataset": "PROD.RATE.TABLE",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "APPRPT",
+      "dataset": "PROD.APP.REPORT",
+      "io": "input"
+    },
+    {
+      "program": "DFHSIP",
+      "step": "CICS",
+      "ddname": "LEGACYF",
+      "dataset": "PROD.LEGACY.FILE",
+      "io": "input"
+    }
+  ],
+  "flags": []
+}
