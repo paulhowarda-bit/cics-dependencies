@@ -89,14 +89,16 @@ def prefetch_cics(region: Region, fetcher: Optional[Callable],
                   unavailable: Optional[str] = None,
                   result: Optional[PrefetchResult] = None,
                   jobs: int = 1,
-                  seen: Optional[Iterable[str]] = None) -> PrefetchResult:
+                  seen: Optional[Iterable[str]] = None,
+                  producer: Optional[str] = None) -> PrefetchResult:
     """Retrieve what ``region`` names and does not hold, parsing each round in.
 
     Mutates ``region``. Returns the retrieval report, which is the honest account of what
     was asked for and what came back - a not-found here is a real hole in the model and
     every view downstream should be read against it.
     """
-    pf = Prefetcher(fetcher, paths, dest, unavailable, result, seen=seen)
+    pf = Prefetcher(fetcher, paths, dest, unavailable, result, seen=seen,
+                    producer=producer)
     pf.name_source(source_name)
 
     for _ in range(max_rounds):

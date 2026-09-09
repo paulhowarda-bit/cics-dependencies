@@ -16,6 +16,7 @@ from mainframe_artifacts.fetch import fetch_dependencies
 from mainframe_artifacts.prefetch import PrefetchResult
 from mainframe_artifacts.profiling import StageTimer
 
+from . import PRODUCER
 from .bas import parse_bas
 from .bms import bind_mapsets, build_bms_lineage, parse_bms
 from .bundles import bundle_directories, parse_bundle
@@ -164,7 +165,7 @@ def analyze(sources: Sequence[Tuple[str, str]], *,
     with timer.stage("prefetch"):
         pre = prefetch_cics(region, fetcher, paths=list(paths), dest=dest,
                             source_name=subject, unavailable=unavailable,
-                            max_rounds=max_rounds, jobs=jobs)
+                            max_rounds=max_rounds, jobs=jobs, producer=PRODUCER)
 
     if jcl_lineage is not None:
         with timer.stage("bind-jcl"):
@@ -182,7 +183,8 @@ def analyze(sources: Sequence[Tuple[str, str]], *,
     with timer.stage("fetch"):
         analysis.fetch = fetch_dependencies(art, fetcher, dest=dest,
                                             prefetched=pre.store,
-                                            unavailable=unavailable, jobs=jobs)
+                                            unavailable=unavailable, jobs=jobs,
+                                            producer=PRODUCER)
     return analysis
 
 

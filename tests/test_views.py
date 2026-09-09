@@ -186,3 +186,28 @@ def test_the_boundary_names_the_program_side_gap():
     lineage = build_cics_lineage(parse_csd(WIRED))
     assert any("EXEC CICS START" in b for b in lineage["boundary"])
     assert any("bind_program_artifacts" in b for b in lineage["boundary"])
+
+
+def test_the_manifest_conforms_to_the_written_core_except_for_identity():
+    """Upstream ledger batch 10, item 31: mainframe-artifacts now writes the manifest's
+    shared row vocabulary down, and this package is the one producer that does not yet
+    conform - no row carries `identity`. The other four emit it on every row.
+
+    Pinned rather than fixed, deliberately. `identity` says whether the name in `artifact`
+    is already an estate-wide identity or still needs an external binding to join on, and
+    the right answer per CICS resource kind - a PROGRAM names a load module, a FILE name
+    is region-local while its DSNAME is not - is a modelling decision for this package to
+    make, not one to guess at from outside. Guessing it is exactly the thing the family's
+    "flag, never guess" rule forbids.
+
+    So the gap is recorded here, visibly, and cannot silently grow: any complaint that is
+    NOT the identity one fails this test.
+    """
+    from mainframe_artifacts.manifest import validate_manifest
+
+    region = parse_csd(DECK)
+    parse_sit(" DFHSIT TYPE=CSECT,GRPLIST=(APPLIST)\n", region=region)
+    complaints = validate_manifest(build_cics_artifacts(region))
+
+    assert complaints, "identity landed - delete this test and use the plain conformance one"
+    assert all("has no 'identity'" in c for c in complaints), complaints

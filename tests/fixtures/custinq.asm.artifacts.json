@@ -1,5 +1,6 @@
 {
   "format": "asm-dependencies-artifacts",
+  "formatVersion": 3,
   "program": "CUSTINQ",
   "source": "custinq.asm",
   "note": "One row per artifact this module is related to: modules it calls or loads (dependency: runtime), ddnames it opens (runtime - the JCL DD statement says which dataset each is), and COPY members and macros (compile-time: assembled into the source before it can be read at all). 'evidence' says how the name was established - 'literal' means it is a token in the statement, 'assigned' means a DC initialises the field the operand names and no store into it reaches the site, 'table' means the name is one of a set of constants selected at run time, and 'dynamic' means it is computed at run time and is not in this source. A row marked 'conditional' sits inside an AIF branch this tool could not decide, and 'condition' names the test - supply --sysparm to decide it. 'provides' is what this module can be called AS, which is the other half of the call graph. 'candidates' are names a site COULD reach - a dispatch table's entries, say - kept out of 'artifacts' because which one a run reaches is control flow rather than text, and reported here because a module whose every call is table-driven would otherwise have an empty manifest.",
@@ -51,7 +52,7 @@
       "dependency": "runtime",
       "identity": "global",
       "resolvedBy": "the DDL or DCLGEN that declares it",
-      "needs": "none - a qualified table name is the catalog-global identity; an unqualified one is completed by the bind's QUALIFIER, not here",
+      "needs": "none - a qualified table name is the catalog-global identity; an unqualified one is completed by the bind's QUALIFIER, not here. Written under a Db2 ALIAS or SYNONYM the name is the alias - the base table is catalog knowledge, supplied through --synonym-map / --synonym-resolver, and reported as baseTable",
       "subsystem": "Db2",
       "evidence": "literal",
       "touchedBy": [

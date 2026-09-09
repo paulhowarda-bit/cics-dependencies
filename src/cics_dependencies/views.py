@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Tuple
 
 from mainframe_artifacts.categories import CATEGORY_IBM
 
+from . import VIEW_SCHEMA_VERSION
 from . import PROGRAM_BINDING_API_VERSION
 from .classify import is_ibm_group, subsystem
 from .csd import provides
@@ -204,6 +205,7 @@ def build_cics_artifacts(region: Region) -> dict:
 
     return {
         "format": FORMAT_ARTIFACTS,
+        "formatVersion": VIEW_SCHEMA_VERSION,
         # The subject key. mainframe_artifacts.fetch reads program/job/region to know what
         # NOT to fetch; without this the region asks the estate for itself.
         "region": region.applid or (region.sources[0] if region.sources else "?"),
@@ -553,6 +555,7 @@ def build_cics_lineage(region: Region) -> dict:
 
     return {
         "format": FORMAT_LINEAGE,
+        "formatVersion": VIEW_SCHEMA_VERSION,
         "region": region.applid or (region.sources[0] if region.sources else "?"),
         "sources": list(region.sources),
         "note": _LINEAGE_NOTE,
