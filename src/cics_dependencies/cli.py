@@ -18,7 +18,8 @@ from typing import List, Optional, Tuple
 from mainframe_artifacts.artifact_service import load_fetcher
 from mainframe_artifacts.bundle import EstateBundle
 from mainframe_artifacts.cliargs import (add_logging_args, add_output_args,
-                                         add_retrieval_args, jobs as _jobs)
+                                         add_dependents_args, add_retrieval_args,
+                                         dependents_lookup, jobs as _jobs)
 from mainframe_artifacts.errors import CobolXstateError
 from mainframe_artifacts.logging_setup import configure_logging
 from mainframe_artifacts.output import make_run_dir, run_dir, write_json
@@ -35,8 +36,11 @@ PACKAGE_LOGGER = "cics_dependencies"
 #: mistake, the binding would find no `ddBindings`, bind nothing, and say nothing.
 JCL_LINEAGE_FORMAT = "jcl-dependencies-lineage"
 
+# The dependents view is not a --target choice: it is not a view you ask for, it is an
+# answer you were given, so it is written exactly when a lookup supplied one - the same
+# rule the BMS view follows.
 _SUFFIXES = (".csd.artifacts.json", ".csd.lineage.json", ".csd.bms.json",
-             ".csd.prefetch.json", ".csd.fetch.json")
+             ".csd.dependents.json", ".csd.prefetch.json", ".csd.fetch.json")
 
 
 def build_parser():
@@ -70,6 +74,7 @@ def build_parser():
     p.add_argument("--target", choices=("artifacts", "lineage", "both"), default="both",
                    help="which view to write (default: both)")
     add_retrieval_args(p)
+    add_dependents_args(p)
     add_output_args(p, outdir_help="where to write the views and reports (default: out)")
     add_logging_args(p)
     return p
@@ -132,10 +137,18 @@ def _run(args, timing_sink=None) -> int:
         timer.report()
         return 0
 
+    reverse, why_dependents = dependents_lookup(args)
+    if why_dependents:
+        _log.error("error: {0}".format(why_dependents))
+        return 2
+
     analysis = analyze(sources, sit=sit, source_name=source_name, bundle=bundle,
                        fetcher=fetcher, retrieve=not args.no_fetch, dest=deps,
                        unavailable=why_service, jcl_lineage=jcl_lineage,
-                       jobs=_jobs(args), timer=timer)
+                       jobs=_jobs(args), timer=timer,
+                       dependents=reverse.mapping if reverse is not None else None,
+                       dependents_resolver=(reverse.resolver if reverse is not None
+                                            else None))
 
     base = Path(source_name).stem
     wanted = set({"both": ("artifacts", "lineage")}.get(args.target, (args.target,)))
@@ -143,6 +156,8 @@ def _run(args, timing_sink=None) -> int:
         ".csd.artifacts.json": analysis.artifacts() if "artifacts" in wanted else None,
         ".csd.lineage.json": analysis.lineage() if "lineage" in wanted else None,
         ".csd.bms.json": analysis.bms(),
+        # None when no door was opened, and the loop below writes nothing for a None.
+        ".csd.dependents.json": analysis.dependents(),
         ".csd.prefetch.json": analysis.prefetch.report(),
         ".csd.fetch.json": analysis.fetch,
     }

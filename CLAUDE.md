@@ -136,7 +136,8 @@ prefetch.py     replay-until-quiet closure over LISTs, GROUPs and SIT-named tabl
                 members not in hand. What is replayed is the MODEL's gaps, not a
                 parser's resolver: a CSD deck includes nothing textually, so there is
                 no resolver to record
-views.py        Region -> the two JSON views + the two cross-repo binders
+views.py        Region -> the two JSON views + the two cross-repo binders, plus
+                the dependents view when a host supplied the reverse direction
 ```
 
 `api.py` wires prefetch -> parse -> views -> fetch; `cli.py` is a thin front end over it.
@@ -413,3 +414,14 @@ remains is not code:
 4. **Register the fourteen kinds upstream** once a corpus run shows which of them actually
    appear often enough to be worth fetching. `tests/test_resources.py` goes red the day any
    of them lands in `mainframe_artifacts.fetch._KIND_TYPE`.
+
+**The dependents view is the only output whose facts are not in the decks.** It is the
+host's answer to a question a CSD cannot answer - which of the estate's programs read this
+file definition, start this transaction, send this mapset - so it stays its own view:
+never merged into `artifacts` or `lineage`, always saying which door supplied it, and
+absent altogether when no door was opened. `None` from `RegionAnalysis.dependents()` means
+nobody was asked, exactly as `bms()` returns `None` when no BMS was given; an empty
+`dependents` list on a resource means the index was asked and nothing depends on it; a
+resource under `unanswered` means neither. The vocabulary those rows are validated against
+is `mainframe_artifacts.kinds`, and `tests/test_dependents.py` pins that every kind
+`PROVIDES_KIND` emits is in it - it was fifteen words short when the contract arrived.

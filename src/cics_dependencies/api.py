@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
+                    Tuple)
 
-from mainframe_artifacts.bundle import EstateBundle, recording_fetcher, write_bundle
+from mainframe_artifacts.bundle import (EstateBundle, recording_dependents_resolver,
+                                        recording_fetcher, write_bundle)
+from mainframe_artifacts.dependents import DependentsLookup
 from mainframe_artifacts.fetch import fetch_dependencies
 from mainframe_artifacts.prefetch import PrefetchResult
 from mainframe_artifacts.profiling import StageTimer
@@ -28,7 +31,7 @@ from .prefetch import prefetch_cics
 from .sit import parse_sit
 from .tables import parse_tables
 from .views import (bind_jcl_region, bind_program_artifacts, build_cics_artifacts,
-                    build_cics_lineage)
+                    build_cics_dependents, build_cics_lineage)
 
 _log = logging.getLogger(__name__)
 
@@ -44,9 +47,14 @@ class RegionAnalysis:
     #: Parsed BMS mapsets, if any BMS source was supplied. Kept apart from the region on
     #: purpose: a mapset is a screen layout, not a CSD resource.
     mapsets: List = field(default_factory=list)
+    #: What the estate says depends on the resources these definitions provide - None
+    #: when the run opened neither door, and then :meth:`dependents` is None too, for the
+    #: same reason :meth:`bms` is.
+    dependents_lookup: Optional[DependentsLookup] = None
 
     _lineage: Optional[dict] = field(default=None, repr=False)
     _artifacts: Optional[dict] = field(default=None, repr=False)
+    _dependents: Optional[dict] = field(default=None, repr=False)
 
     def artifacts(self) -> dict:
         """The manifest: what these sources define, and everything they name."""
@@ -67,6 +75,20 @@ class RegionAnalysis:
         fields" are different statements, and only the first is usually true.
         """
         return build_bms_lineage(self.mapsets) if self.mapsets else None
+
+    def dependents(self) -> Optional[dict]:
+        """What depends on the resources defined here, or ``None`` if nobody was asked.
+
+        ``None`` rather than an empty view, the same distinction :meth:`bms` draws: an
+        empty answer would read as "nothing in the estate depends on these resources",
+        which a run that opened no door has no basis for.
+        """
+        if self.dependents_lookup is None or not self.dependents_lookup.supplied:
+            return None
+        if self._dependents is None:
+            self._dependents = build_cics_dependents(self.region,
+                                                     self.dependents_lookup)
+        return self._dependents
 
     def unread_bundles(self) -> List[dict]:
         """BUNDLEDIRs named by the definitions and never read - resources missing from
@@ -103,6 +125,8 @@ def analyze(sources: Sequence[Tuple[str, str]], *,
             jcl_lineage: Optional[dict] = None,
             max_rounds: int = 12, jobs: int = 1,
             timer: Optional[StageTimer] = None,
+            dependents: Optional[Mapping[str, Sequence[dict]]] = None,
+            dependents_resolver: Optional[Callable[..., Any]] = None,
             ) -> RegionAnalysis:
     """Parse definition sources into one region, close over what they name, and view it.
 
@@ -131,6 +155,8 @@ def analyze(sources: Sequence[Tuple[str, str]], *,
     if bundle is not None:
         fetcher = bundle.fetcher()
         unavailable = unavailable or bundle.unavailable
+        if dependents_resolver is None and bundle.has_dependents():
+            dependents_resolver = bundle.dependents()
     elif not retrieve:
         fetcher = None
         unavailable = unavailable or ("retrieval was disabled for this run, so this "
@@ -174,12 +200,19 @@ def analyze(sources: Sequence[Tuple[str, str]], *,
     with timer.stage("install"):
         apply_install_state(region)
 
+    reverse = (DependentsLookup(dependents, dependents_resolver)
+               if (dependents or dependents_resolver is not None) else None)
     analysis = RegionAnalysis(region=region, prefetch=pre, source_name=subject,
-                              mapsets=mapsets)
+                              mapsets=mapsets, dependents_lookup=reverse)
     with timer.stage("cics-artifacts"):
         art = analysis.artifacts()
     with timer.stage("cics-lineage"):
         analysis.lineage()
+    if reverse is not None:
+        # Built here rather than on demand: building it is what ASKS the host, and a
+        # gather run has to make the asks in order to record them.
+        with timer.stage("cics-dependents"):
+            analysis.dependents()
     with timer.stage("fetch"):
         analysis.fetch = fetch_dependencies(art, fetcher, dest=dest,
                                             prefetched=pre.store,
@@ -194,17 +227,26 @@ def gather(sources: Sequence[Tuple[str, str]], *, dest: str,
            fetcher: Optional[Any] = None,
            paths: Sequence[str] = (),
            unavailable: Optional[str] = None,
-           max_rounds: int = 12, jobs: int = 1) -> str:
-    """Run the retrieval half where the estate is reachable; return the bundle manifest."""
+           max_rounds: int = 12, jobs: int = 1,
+           dependents: Optional[Mapping[str, Sequence[dict]]] = None,
+           dependents_resolver: Optional[Callable[..., Any]] = None) -> str:
+    """Run the retrieval half where the estate is reachable; return the bundle manifest.
+
+    A dependents lookup is gathered like the artifact service: wrapped in a recorder,
+    asked exactly as a live run asks it, and its answers written into the bundle. The
+    index is as unreachable from the modelling box as the estate is."""
     recorder, answers = recording_fetcher(fetcher) if fetcher is not None else (None, [])
+    reverse, reverse_answers = (recording_dependents_resolver(dependents_resolver)
+                                if dependents_resolver is not None else (None, []))
     analysis = analyze(sources, sit=sit, source_name=source_name, fetcher=recorder,
                        paths=paths, dest=dest, unavailable=unavailable,
-                       max_rounds=max_rounds, jobs=jobs)
+                       max_rounds=max_rounds, jobs=jobs, dependents=dependents,
+                       dependents_resolver=reverse)
     subject = source_name or sources[0][0]
     text = next((t for n, t in sources if n == subject), sources[0][1])
     return write_bundle(dest, subject_name=subject, subject_text=text,
                         kind="csd", prefetch=analysis.prefetch, answers=answers,
-                        fetch=analysis.fetch)
+                        fetch=analysis.fetch, dependents=reverse_answers)
 
 
 def summarize(analysis: RegionAnalysis) -> List[str]:

@@ -25,6 +25,8 @@ from typing import Dict, List, Optional, Tuple
 
 from mainframe_artifacts.categories import CATEGORY_IBM
 
+from mainframe_artifacts.dependents import output_rows
+
 from . import VIEW_SCHEMA_VERSION
 from . import PROGRAM_BINDING_API_VERSION
 from .classify import is_ibm_group, subsystem
@@ -35,6 +37,7 @@ from .resources import (NO_IO_KINDS, PROVIDES_KIND, REGISTERED_KINDS, UNREGISTER
 
 FORMAT_ARTIFACTS = "cics-dependencies-artifacts"
 FORMAT_LINEAGE = "cics-dependencies-lineage"
+FORMAT_DEPENDENTS = "cics-dependencies-dependents"
 
 #: Relations that START work in the region. Driven off the relation rather than off a list
 #: of resource types, so a new entry-point kind added to ``resources.ATTRIBUTES`` with the
@@ -563,5 +566,86 @@ def build_cics_lineage(region: Region) -> dict:
         "transactions": transactions,
         "unreachable": unreachable,
         "boundary": _BOUNDARY,
+        "flags": flags,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# dependents - the reverse direction, which only a host index holds
+# --------------------------------------------------------------------------- #
+#
+# Every other view here reads the definitions in hand. This one reports what the ESTATE
+# says depends on the resources those definitions provide, so it stays apart from them:
+# its rows have no provenance in any deck, and merging them into `artifacts` would put a
+# fact nobody here can check beside facts that are all checkable.
+
+_DEPENDENTS_NOTE = (
+    "What the ESTATE says depends on the resources this region DEFINES - the reverse of "
+    "every other view here, and the half a CSD cannot contain: which programs issue "
+    "READ FILE against a file definition, which start a transaction, which SEND MAP to a "
+    "mapset. Supplied by the host through --dependents-map or --dependents-resolver and "
+    "reported as given; 'suppliedBy' says which door answered. Rows attach to the "
+    "RESOURCE a dependent named, which is what makes this the region's answer rather than "
+    "a passthrough of the host's rows: the same name can be a file in one group and a "
+    "queue in another, and the resource says which was meant. 'matchStrength' is the "
+    "host's own field, never folded into prose. A capped answer carries 'truncated' with "
+    "the true 'total'. 'unanswered' is the honest half - a resource the lookup does not "
+    "cover, or did not reach because it failed - and absent from it means nobody said, "
+    "never that nothing depends on the resource."
+)
+
+
+def build_cics_dependents(region: Region, lookup) -> Optional[dict]:
+    """What depends on each resource this region defines, or ``None`` if nobody was asked.
+
+    ``None`` rather than an empty view, exactly as :meth:`RegionAnalysis.bms` returns
+    ``None`` when no BMS was supplied: "no lookup was given" and "nothing depends on these
+    resources" are different statements, and only the first is usually true.
+    """
+    if lookup is None or not lookup.supplied:
+        return None
+
+    resources: List[dict] = []
+    unanswered: List[dict] = []
+    for provided in provides(region):
+        answer = lookup(provided["name"], provided["kind"])
+        if answer is None:
+            unanswered.append({
+                "name": provided["name"], "kind": provided["kind"],
+                "reason": ("the lookup failed earlier in this run and was not asked again"
+                           if lookup.disabled_reason else
+                           "the lookup does not cover this resource"),
+            })
+            continue
+        row = {"name": provided["name"], "kind": provided["kind"],
+               "resourceType": provided["resourceType"], "group": provided["group"],
+               "installed": provided["installed"],
+               "dependents": output_rows(answer.rows),
+               "count": len(answer.rows), "suppliedBy": answer.door}
+        if answer.truncated:
+            row["truncated"] = True
+            if answer.total is not None:
+                row["total"] = answer.total
+        resources.append(row)
+
+    flags = []
+    if lookup.disabled_reason:
+        flags.append(
+            "dependents lookup failed mid-run ({0}); resources it did not reach stay "
+            "unanswered - fix the lookup and re-run".format(lookup.disabled_reason))
+    if lookup.map_warning:
+        flags.append(
+            "part of the dependents map could not be read ({0}); the entries it did read "
+            "answered normally".format(lookup.map_warning))
+
+    return {
+        "format": FORMAT_DEPENDENTS,
+        "formatVersion": VIEW_SCHEMA_VERSION,
+        "region": region.applid or (region.sources[0] if region.sources else "?"),
+        "sources": list(region.sources),
+        "note": _DEPENDENTS_NOTE,
+        "suppliedBy": lookup.describe(),
+        "resources": resources,
+        "unanswered": unanswered,
         "flags": flags,
     }
