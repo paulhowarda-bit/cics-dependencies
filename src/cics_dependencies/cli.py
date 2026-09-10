@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from mainframe_artifacts.artifact_service import load_fetcher
-from mainframe_artifacts.bundle import EstateBundle
+from mainframe_artifacts.bundle import open_bundle
 from mainframe_artifacts.cliargs import (add_logging_args, add_output_args,
                                          add_dependents_args, add_retrieval_args,
                                          dependents_lookup, jobs as _jobs)
@@ -116,7 +116,22 @@ def _run(args, timing_sink=None) -> int:
 
     jcl_lineage = _load_jcl(args.bind_jcl) if args.bind_jcl else None
 
-    bundle = EstateBundle.load(args.from_bundle) if args.from_bundle else None
+    if args.gather_only and args.from_bundle:
+        _log.error("error: --gather-only writes a bundle and --from-bundle reads one; "
+                   "they cannot both apply to a single run")
+        return 2
+
+    # open_bundle, not a classmethod on EstateBundle: there is no such classmethod, so
+    # every --from-bundle run died with an AttributeError reported as an internal error.
+    # Nothing in the suite reached this line, which is why it survived - the offline half
+    # of the whole gather/replay design was unusable.
+    bundle = None
+    if args.from_bundle:
+        try:
+            bundle = open_bundle(args.from_bundle)
+        except CobolXstateError as exc:
+            _log.error("error: {0}".format(exc))
+            return 2
     fetcher, why_service = (None, None) if bundle is not None \
         else _service(args, source_name)
 
@@ -127,20 +142,26 @@ def _run(args, timing_sink=None) -> int:
         return 2
     deps = str(out_dir / "deps")
 
+    # Before the gather branch, not after: --gather-only is the run that happens where the
+    # INDEX is reachable, so it is the run that has to ask it. Built later, the door was
+    # silently dropped from every bundle - which a modelling box has no way to notice.
+    reverse, why_dependents = dependents_lookup(args)
+    if why_dependents:
+        _log.error("error: {0}".format(why_dependents))
+        return 2
+
     if args.gather_only:
         gathered = gather(sources, sit=sit, source_name=source_name, fetcher=fetcher,
                           dest=args.gather_only, unavailable=why_service,
-                          jobs=_jobs(args))
+                          jobs=_jobs(args),
+                          dependents=reverse.mapping if reverse is not None else None,
+                          dependents_resolver=(reverse.resolver if reverse is not None
+                                               else None))
         _log.info("[{0}] wrote estate bundle {1}".format(source_name, gathered))
         _log.info("[{0}] model from it with: --from-bundle {1}".format(
             source_name, args.gather_only))
         timer.report()
         return 0
-
-    reverse, why_dependents = dependents_lookup(args)
-    if why_dependents:
-        _log.error("error: {0}".format(why_dependents))
-        return 2
 
     analysis = analyze(sources, sit=sit, source_name=source_name, bundle=bundle,
                        fetcher=fetcher, retrieve=not args.no_fetch, dest=deps,

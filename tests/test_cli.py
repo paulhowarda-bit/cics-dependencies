@@ -10,6 +10,7 @@ DECK = str(REPO / "examples" / "appregn.csd")
 SIT = str(REPO / "examples" / "appregn.sit")
 JCL = str(REPO / "tests" / "fixtures" / "cicsapp1.jcl.lineage.json")
 ASM = str(REPO / "tests" / "fixtures" / "custinq.asm.artifacts.json")
+FAKE = "fakes.estate:fetch_artifact"        # tests/ is on the path (pyproject pythonpath)
 
 
 def _out(tmp_path):
@@ -72,6 +73,57 @@ def test_bind_program_writes_one_bound_manifest_per_input(tmp_path):
     bound = json.loads(
         (Path(_out(tmp_path)) / "custinq.asm.artifacts.bound.json").read_text("utf-8"))
     assert bound["cicsBinding"]["bound"] == 5
+
+
+def test_gather_then_replay_reproduces_the_views(tmp_path):
+    """The offline half of the design: a bundle gathered where the estate is reachable
+    must model to the same bytes on a box that cannot reach it. Nothing exercised
+    --from-bundle before this, and it had been dead - an AttributeError reported as an
+    internal error - for as long as it has existed."""
+    bundle, live, offline = (str(tmp_path / "b"), str(tmp_path / "live"),
+                             str(tmp_path / "off"))
+    assert run([DECK, "--sit", SIT, "--outdir", str(tmp_path / "g"), "-q",
+                "--fetcher", FAKE, "--gather-only", bundle]) == 0
+    assert run([DECK, "--sit", SIT, "--outdir", live, "-q", "--fetcher", FAKE]) == 0
+    # No --fetcher at all on the replay: the bundle is the service.
+    assert run([DECK, "--sit", SIT, "--outdir", offline, "-q",
+                "--from-bundle", bundle]) == 0
+    for name in ("appregn.csd.artifacts.json", "appregn.csd.lineage.json"):
+        assert (Path(offline) / name).read_text("utf-8") == \
+            (Path(live) / name).read_text("utf-8")
+
+
+def test_a_bundle_that_is_not_there_is_an_operator_error_not_a_crash(tmp_path):
+    assert run([DECK, "--sit", SIT, "--outdir", _out(tmp_path), "-q",
+                "--from-bundle", str(tmp_path / "nope")]) == 2
+
+
+def test_gathering_and_replaying_in_one_run_is_refused(tmp_path):
+    """The other four front-ends refuse this; silently honouring one flag and ignoring
+    the other is how an operator ends up believing a bundle was written."""
+    assert run([DECK, "--sit", SIT, "--outdir", _out(tmp_path), "-q",
+                "--gather-only", str(tmp_path / "b"),
+                "--from-bundle", str(tmp_path / "b")]) == 2
+
+
+def test_gather_records_the_reverse_direction_it_was_given(tmp_path):
+    """--gather-only is the run that happens where the INDEX is reachable, so a door the
+    CLI forgets to hand it is a bundle that replays the estate and not the reverse
+    direction - and the modelling box has no way to notice."""
+    from mainframe_artifacts.bundle import open_bundle
+
+    bundle = str(tmp_path / "b")
+    assert run([DECK, "--sit", SIT, "--outdir", _out(tmp_path), "-q",
+                "--gather-only", bundle,
+                "--dependents-resolver", "fakes.index:dependents"]) == 0
+    assert open_bundle(bundle).has_dependents()
+
+    out = str(tmp_path / "o2")
+    assert run([DECK, "--sit", SIT, "--outdir", out, "-q",
+                "--from-bundle", bundle]) == 0
+    dep = json.loads((Path(out) / "appregn.csd.dependents.json").read_text("utf-8"))
+    row = next(r for r in dep["resources"] if r["name"] == "CUSTMAS")
+    assert [d["name"] for d in row["dependents"]] == ["CUSTINQ1"]
 
 
 def test_a_missing_source_is_an_operator_error_not_a_crash(tmp_path):
