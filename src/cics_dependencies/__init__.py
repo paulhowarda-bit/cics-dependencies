@@ -42,4 +42,10 @@ PRODUCER = "cics-dependencies"
 #: ``formatVersion: 2`` on its own since conditions moved into interned pools, so 1 would
 #: have taken a published number BACKWARDS - the exact silent shape change this key exists
 #: to prevent. One number across the family keeps a consumer's rule the same everywhere.
-VIEW_SCHEMA_VERSION = 3
+#:
+#: 4: the artifacts view became authoritative for the region's flags and the lineage view
+#: now carries only the notes about its own rows - it used to carry both lists, which
+#: overlapped without being identical, so every consumer merged and deduplicated them. A
+#: per-line flag family is aggregated into one flag with a count and a sample, and a
+#: `provides` row can carry `incomplete`.
+VIEW_SCHEMA_VERSION = 4

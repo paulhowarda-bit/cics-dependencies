@@ -179,12 +179,26 @@ Both take plain dicts and return plain dicts.
 | era | artifact parsed | defines a transaction as |
 |---|---|---|
 | macro tables | `DFHPCT` / `DFHPPT` / `DFHFCT` / `DFHDCT` / `DSNCRCT` assembler decks | `DFHPCT TYPE=ENTRY,TRANSID=MENU,PROGRAM=MENU001` |
-| CSD | `DFHCSDUP` input decks and `EXTRACT` / `LIST` output | `DEFINE TRANSACTION(MENU) GROUP(APPG) PROGRAM(MENU001)` |
+| CSD | `DFHCSDUP` input decks, `EXTRACT` output, and the `LIST ... OBJECTS` **report** | `DEFINE TRANSACTION(MENU) GROUP(APPG) PROGRAM(MENU001)`, or the report's verbless `TRANSACTION(MENU)   GROUP(APPG)` |
 | BAS / bundles | CICSPlex SM `BATCHREP` decks; a bundle's `META-INF/cics.xml` | `CREATE TRANDEF NAME(MENU) PROGRAM(MENU001)` |
 
 The CSD itself is a VSAM KSDS. It is not parsed and never will be — the parseable
-artifact is always the `DFHCSDUP` deck or its `EXTRACT` output, which is what sites keep
-in source control.
+artifact is always the `DFHCSDUP` deck, its `EXTRACT` output, or the utility's own printed
+`LIST` report, which is what sites keep in source control.
+
+**A whole-region CSD is usually the report, not the deck**, and the two are not the same
+syntax: the report has no command verb anywhere, an object is introduced by its own type,
+its attributes are indented under it, column 1 is printer carriage control and the right
+margin of each header carries the report's timestamp. It is recognised and read as
+definitions (`lex_csd_report`). Read as a deck it recovers *nothing* — every line is "text
+before the first command" — which is what one estate's nine region dumps, 94% of its CICS
+resources, were doing.
+
+**The column-72 margin is decided per source rather than per line.** Content past column 80
+cannot be on an 80-column card, so a file that has any is read at its full width and says
+so once. Cutting one at 72 discards real attributes — a transaction's `REMOTESYSTEM`, a
+file's `STRINGS` — and the cut then leaves an unclosed parenthesis that swallows the rest
+of the statement. A definition that did lose text says so on its row (`incomplete`).
 
 **The eras differ in one way that changes the output.** An FCT entry usually carries no
 `DSNAME`: the file-to-dataset binding is a **DD in the CICS region startup JCL**. So on a

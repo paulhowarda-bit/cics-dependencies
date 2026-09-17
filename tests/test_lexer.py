@@ -83,10 +83,45 @@ def test_comments_and_blank_lines_are_skipped():
 
 
 def test_content_past_column_72_is_reported_not_dropped_silently():
-    long = " DEFINE FILE(X) GROUP(G)" + " " * 50 + "STATUS(ENABLED)"
+    """On a genuine card image - 80 columns, no more - column 73 onwards is the sequence
+    field and CICS does not read it."""
+    long = " DEFINE FILE(X) GROUP(G)" + " " * 44 + "STATUS(ENA)"
+    assert len(long) <= 80
     stmts, flags = lex_csd(long + "\n")
     assert stmts[0].first("STATUS") is None
     assert any("past column 72" in f for f in flags)
+
+
+def test_a_source_wider_than_a_card_keeps_its_operands():
+    """A line of 121 characters is not sitting on an 80-column card, so the margin rule
+    does not describe the file it is in. Cutting at 72 there threw away real attributes -
+    a transaction's REMOTESYSTEM, a file's STRINGS - and the truncation then left an
+    unclosed parenthesis that swallowed the rest of the statement."""
+    long = (" DEFINE TRANSACTION(T) GROUP(G)" + " " * 40
+            + "ROUTABLE(NO) REMOTESYSTEM(RSYB) REMOTENAME(TRNB)")
+    assert len(long) > 80
+    stmts, flags = lex_csd(long + "\n")
+    assert stmts[0].first("REMOTESYSTEM") == "RSYB"
+    assert stmts[0].first("REMOTENAME") == "TRNB"
+    assert not any("past column 72" in f for f in flags)
+    assert not any("never closed" in f for f in flags)
+    # One flag about the FILE, not one per line: it is a single fact about the source.
+    assert sum("not a deck of 80-column card images" in f for f in flags) == 1
+
+
+def test_a_cut_line_marks_the_definition_it_damaged():
+    """The region flag names the line. The statement has to carry it too, or a row whose
+    attributes were cut reads exactly like one written without them."""
+    long = " DEFINE TRANSACTION(T) GROUP(G)".ljust(72) + "SYS(RSY)"
+    assert len(long) <= 80          # a card image, so the margin genuinely applies
+    stmts, _ = lex_csd(long + "\n")
+    assert stmts[0].damaged
+    assert "cut" in stmts[0].damaged[0]
+
+
+def test_an_unclosed_parenthesis_marks_the_definition_too():
+    stmts, _ = lex_csd(" DEFINE FILE(ACCTDAT GROUP(CARDDEMO)\n")
+    assert any("never closed" in d for d in stmts[0].damaged)
 
 
 def test_a_sequence_field_past_column_72_is_not_flagged():

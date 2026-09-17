@@ -156,6 +156,30 @@ _SIT_NAMES = re.compile(r"^\s*\S*\s+(DFH|KIK)SIT\b|^\s*GRPLIST\s*=", re.I | re.M
 _BAS_CREATE = re.compile(r"^\s*CREATE\s+[A-Z0-9]+DEF\b", re.I | re.M)
 _CSD_DEFINE = re.compile(r"^\s*(DEFINE|ADD|USERDEFINE)\s", re.I | re.M)
 
+# DFHCSDUP's printed listing, which carries no command verb at all. Two independent
+# signatures, because a capture can lose either end: the utility's own messages (a listing
+# saved from the job's SYSPRINT keeps them; one saved by cut-and-paste may not), and the
+# report-only timestamps it prints on essentially every object. `_CSD_REPORT_OBJECT`
+# alone is deliberately NOT enough - a deck's `DEFINE FILE(x) GROUP(y)` matches the same
+# shape once the verb is stripped, so it is the ABSENCE of a verb that decides.
+_CSD_REPORT_MESSAGE = re.compile(r"^\s*DFH5\d{3}\s*[A-Z]?\s", re.M)
+_CSD_REPORT_TIMES = re.compile(r"^\s*(DEFINETIME|CHANGETIME)\(", re.I | re.M)
+_CSD_REPORT_OBJECT = re.compile(r"^\s?[A-Z][A-Z0-9$#@]*\([^)]*\)\s+GROUP\(", re.I | re.M)
+
+
+def looks_like_csd_report(text: str) -> bool:
+    """Is this DFHCSDUP's printed object listing rather than a definition deck?
+
+    The distinction is not cosmetic: handed to the deck lexer, a listing produces ZERO
+    resources and one "text before the first command" flag per line - a flag list longer
+    than the file, wrapped around an empty region that looks exactly like a region whose
+    deck defined nothing.
+    """
+    if _CSD_DEFINE.search(text):
+        return False
+    return bool(_CSD_REPORT_MESSAGE.search(text)
+                or (_CSD_REPORT_OBJECT.search(text) and _CSD_REPORT_TIMES.search(text)))
+
 
 def source_kind(text: str, source_name: str = "") -> str:
     """Which parser this source belongs to.
@@ -170,6 +194,11 @@ def source_kind(text: str, source_name: str = "") -> str:
     """
     if text.lstrip().startswith("<?xml") or "<manifest" in text[:2000]:
         return KIND_BUNDLE
+    # Before the assembler checks, not after: a listing of MAPSETs and PROGRAMs can
+    # legitimately name a resource `DFHMDF` or `DFHPCT`, and one line of that would send a
+    # whole region dump to the BMS or macro-table parser, which recovers nothing from it.
+    if looks_like_csd_report(text):
+        return KIND_CSD
     if _BMS_NAMES.search(text):
         return KIND_BMS
     if _MACRO_NAMES.search(text):

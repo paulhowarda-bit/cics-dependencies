@@ -211,3 +211,67 @@ def test_the_manifest_conforms_to_the_written_core_except_for_identity():
 
     assert complaints, "identity landed - delete this test and use the plain conformance one"
     assert all("has no 'identity'" in c for c in complaints), complaints
+
+
+# --------------------------------------------------------------------------- #
+# flags: one list, one flag per class
+# --------------------------------------------------------------------------- #
+
+def _many_cut_lines(n):
+    """A card-image deck whose lines each lose an operand at the margin."""
+    return "".join(
+        (" DEFINE PROGRAM(PGM%03d) GROUP(APPG)" % i).ljust(72) + "KEY(USR)\n"
+        for i in range(n))
+
+
+def test_a_per_line_family_is_one_flag_with_a_count():
+    """One flag per offending LINE is how a 320,000-line region dump produced a flag list
+    longer than itself - a transcript of the deck rather than a report about it."""
+    manifest = build_cics_artifacts(parse_csd(_many_cut_lines(40)))
+    cut = [f for f in manifest["flags"] if "past column 72" in f]
+    assert len(cut) == 1
+    assert "40 line(s), first at 1, e.g. 1, 2, 3" in cut[0]
+
+
+def test_two_classes_stay_two_flags():
+    deck = _many_cut_lines(3) + " DEFINE FILE(ACCTDAT GROUP(APPG)\n"
+    flags = build_cics_artifacts(parse_csd(deck))["flags"]
+    assert sum("past column 72" in f for f in flags) == 1
+    assert sum("never closed" in f for f in flags) == 1
+
+
+def test_a_class_seen_once_keeps_its_own_message():
+    """Most CSD members in an estate are per-object extracts of a few lines, and there the
+    unaggregated shape was already proportionate."""
+    deck = (" DEFINE PROGRAM(PGMA) GROUP(APPG)").ljust(72) + "KEY(USR)\n"
+    cut = [f for f in build_cics_artifacts(parse_csd(deck))["flags"]
+           if "past column 72" in f]
+    assert len(cut) == 1 and "line(s)" not in cut[0] and cut[0].startswith("line 1: ")
+
+
+def test_the_artifacts_view_is_authoritative_for_the_regions_flags():
+    """They used to be in both views, overlapping without being identical, so every
+    consumer had to merge and deduplicate two lists before it could read either."""
+    region = parse_csd(DECK)
+    region.flags.append("line 9: something about the source")
+    artifacts = build_cics_artifacts(region)
+    lineage = build_cics_lineage(region)
+    assert "line 9: something about the source" in artifacts["flags"]
+    assert "line 9: something about the source" not in lineage["flags"]
+    # The lineage view keeps the notes about ITS rows, and only those.
+    assert all("transactions are started by nothing" in f for f in lineage["flags"])
+
+
+def test_a_definition_that_lost_text_says_so_on_its_row():
+    """A TRANSACTION whose REMOTESYSTEM was cut at the margin reads exactly like a local
+    one. The flag names the line; the row has to name itself."""
+    deck = (" DEFINE TRANSACTION(RPTA) GROUP(APPG)").ljust(72) + "SYS(RSY)\n"
+    row = next(r for r in build_cics_artifacts(parse_csd(deck))["provides"]
+               if r["name"] == "RPTA")
+    assert "cut" in row["incomplete"][0]
+
+
+def test_an_undamaged_row_carries_no_such_key():
+    row = next(r for r in build_cics_artifacts(parse_csd(DECK))["provides"]
+               if r["name"] == "CAUP")
+    assert "incomplete" not in row

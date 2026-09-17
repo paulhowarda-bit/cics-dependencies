@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from .detect import csd_source
-from .lexer import Statement, lex_csd
+from .detect import csd_source, looks_like_csd_report
+from .lexer import Statement, lex_csd, lex_csd_report
 from .model import (
     EVIDENCE_LITERAL, EVIDENCE_PREFIX, GroupDef, ListDef, Reference, Region, Resource,
     SOURCE_CSD,
@@ -123,6 +123,7 @@ def _define(stmt: Statement, source_name: str) -> Optional[Resource]:
     if res.group is None:
         res.flags.append(
             "no GROUP - a definition outside a group cannot be installed by any LIST")
+    res.incomplete = list(stmt.damaged)
     res.references = build_references(rtype, attrs, lines)
     return res
 
@@ -140,7 +141,18 @@ def parse_csd(text: str, *, source_name: str = "<csd>",
 
     deck, wrapper_flags = csd_source(text)
     region.flags.extend(wrapper_flags)
-    statements, flags = lex_csd(deck)
+    if looks_like_csd_report(deck):
+        # A whole-region CSD is far more often the utility's printed listing than the deck
+        # that built it, and the two are not the same syntax. Read as the deck it is not,
+        # a listing yields nothing at all - so the dialect is decided here rather than
+        # asked of the caller, like every other dialect in this package.
+        region.flags.append(
+            "%s is DFHCSDUP LIST report output - its printed listing, which carries no "
+            "command verbs - so its objects were read from their own type headers rather "
+            "than from DEFINE statements" % source_name)
+        statements, flags = lex_csd_report(deck)
+    else:
+        statements, flags = lex_csd(deck)
     region.flags.extend(flags)
 
     for stmt in statements:
@@ -186,9 +198,17 @@ def provides(region: Region) -> List[dict]:
     era, because when two eras define one resource both rows are here and the reader has
     to be able to tell them apart.
     """
-    rows = [{"name": r.name, "kind": PROVIDES_KIND.get(r.kind, r.kind.lower()),
-             "resourceType": r.kind, "group": r.group, "source": r.source,
-             "sourceName": r.source_name, "line": r.line, "installed": r.installed}
-            for r in region.resources]
+    rows = []
+    for r in region.resources:
+        row = {"name": r.name, "kind": PROVIDES_KIND.get(r.kind, r.kind.lower()),
+               "resourceType": r.kind, "group": r.group, "source": r.source,
+               "sourceName": r.source_name, "line": r.line, "installed": r.installed}
+        # Absent for a definition that arrived whole, which is nearly all of them. Present
+        # is the only way a reader can tell "this attribute was not written" from "this
+        # attribute was cut off before we read it" - and a TRANSACTION whose REMOTESYSTEM
+        # was cut reads exactly like a local one.
+        if r.incomplete:
+            row["incomplete"] = list(r.incomplete)
+        rows.append(row)
     rows.sort(key=lambda row: (row["kind"], row["name"], row["sourceName"], row["line"]))
     return rows

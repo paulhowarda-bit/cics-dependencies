@@ -87,6 +87,13 @@ class Resource:
     installed: str = INSTALLED_UNKNOWN
     flags: List[str] = field(default_factory=list)
 
+    #: Why this definition is known to be INCOMPLETE - text cut at the margin, an operand
+    #: whose parenthesis never closed and swallowed the rest of the statement. Empty for
+    #: the ordinary case. It rides on the resource rather than only in the region's flags
+    #: because the damage is invisible in the row it produced: a TRANSACTION whose
+    #: REMOTESYSTEM was cut reads exactly like a local one.
+    incomplete: List[str] = field(default_factory=list)
+
     def key(self):
         """Identity within a region. A resource kind and a name - the group is where it
         is DEFINED, not part of what it IS, and the same name in two groups is a real

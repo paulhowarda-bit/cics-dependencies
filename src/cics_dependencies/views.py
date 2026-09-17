@@ -21,6 +21,7 @@ never imports a peer.
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional, Tuple
 
 from mainframe_artifacts.categories import CATEGORY_IBM
@@ -58,7 +59,12 @@ _ARTIFACTS_NOTE = (
     "cics-transaction, file, queue and terminal-map rows join to. Every row carries "
     "`installed` as well as `evidence`: how well the name is known and whether the "
     "definition is live are different questions. A file row's `io` is the access the "
-    "region PERMITS, not the access any program makes.")
+    "region PERMITS, not the access any program makes. `flags` here is the region's own "
+    "list and is authoritative: the lineage view carries only the notes about its rows, "
+    "so the two are not lists to merge. A per-line family is aggregated into one flag "
+    "with a count and a sample of lines. A `provides` row carrying `incomplete` lost text "
+    "from its definition - an attribute missing from such a row was not necessarily "
+    "missing from the source.")
 
 #: A file definition grants access; a program makes it. Said on the row so a consumer
 #: cannot read one as the other.
@@ -123,6 +129,64 @@ def _touch(resource: Resource, reference) -> dict:
     return {"resource": resource.name, "resourceType": resource.kind,
             "group": resource.group, "field": reference.field,
             "relation": reference.relation, "line": reference.line}
+
+
+#: A flag raised about one source LINE, which is the only family that grows with the size
+#: of a member rather than with the number of things wrong with it.
+_PER_LINE = re.compile(r"^line (\d+): (.*)$", re.S)
+#: Where such a flag stops being a message and starts being the offending text: `%r` of
+#: the line's own content. Everything before it is the CLASS - one deck's twelve thousand
+#: cut lines are one fact about the deck, not twelve thousand facts about it.
+_PAYLOAD = re.compile(r": ['\"]")
+#: How many line numbers an aggregated flag carries: enough to find the first instance and
+#: to see they are spread through the member, not enough to become the list again.
+_SAMPLE = 3
+
+
+def aggregate_flags(flags: List[str]) -> List[str]:
+    """One flag per class - with a count and a bounded sample of lines - for the per-line
+    families; everything else verbatim and in place.
+
+    A whole-region CSD raises one flag per offending LINE, and a 320,000-line member
+    produced a flag list longer than itself: a transcript of the deck rather than a report
+    about it, with the conflict warnings (the one case where reading a CSD gives a
+    confidently WRONG answer) buried in six figures of lexical noise.
+
+    A class seen ONCE keeps its own message, payload and all. Rewriting it as "1 line(s),
+    first at 5" would lose the detail that makes it useful and gain nothing: most CSD
+    members in an estate are per-object extracts of four to eight lines, and there the
+    unaggregated shape was already proportionate.
+    """
+    counts: Dict[str, List[int]] = {}
+
+    def classify(flag: str):
+        m = _PER_LINE.match(flag)
+        if m is None:
+            return None, None
+        body = m.group(2)
+        payload = _PAYLOAD.search(body)
+        return (body[:payload.start()] if payload else body), int(m.group(1))
+
+    for flag in flags:
+        cls, lineno = classify(flag)
+        if cls is not None:
+            counts.setdefault(cls, []).append(lineno)
+
+    out: List[str] = []
+    done = set()
+    for flag in flags:
+        cls, _ = classify(flag)
+        if cls is None or len(counts[cls]) == 1:
+            out.append(flag)
+            continue
+        if cls in done:
+            continue
+        done.add(cls)
+        lines = counts[cls]
+        out.append("%s: %s line(s), first at %d, e.g. %s"
+                   % (cls, format(len(lines), ","), lines[0],
+                      ", ".join(str(n) for n in lines[:_SAMPLE])))
+    return out
 
 
 def _conflicts(region: Region) -> List[str]:
@@ -219,7 +283,7 @@ def build_cics_artifacts(region: Region) -> dict:
         "provides": provides(region),
         "artifacts": artifacts,
         "excluded": excluded_rows,
-        "flags": list(region.flags) + _conflicts(region),
+        "flags": aggregate_flags(list(region.flags) + _conflicts(region)),
     }
 
 
@@ -233,7 +297,10 @@ _LINEAGE_NOTE = (
     "write that trips a TRIGGERLEVEL, an MQ message, the SIT's GMTRAN. `transactions` "
     "carries the reverse index: for each transaction, the program it runs and every entry "
     "point that starts it. `unreachable` is the transactions nothing in these definitions "
-    "starts - which is normal and is NOT evidence they are dead: see `boundary`.")
+    "starts - which is normal and is NOT evidence they are dead: see `boundary`. "
+    "`flags` here carries only notes about THESE rows; the region's own flags - the "
+    "source ones, the conflicts - are published by the artifacts view, which is "
+    "authoritative for them. The two lists are not to be merged.")
 
 #: What this view cannot see. Stated in the output rather than left for the reader to
 #: infer, because every one of these gaps makes a transaction look less connected than it
@@ -548,7 +615,10 @@ def build_cics_lineage(region: Region) -> dict:
     unreachable = [t["transaction"] for t in transactions if not t["startedBy"]]
     entry_points.sort(key=lambda e: (e["transaction"], e["kind"], e["name"]))
 
-    flags = list(region.flags)
+    # Deliberately NOT region.flags: those are published by the artifacts view, which is
+    # the one place for them. Carrying them here too made every consumer merge and
+    # deduplicate two lists that overlap but are not identical.
+    flags: List[str] = []
     if unreachable:
         flags.append(
             "%d of %d transactions are started by nothing in these definitions. That is "

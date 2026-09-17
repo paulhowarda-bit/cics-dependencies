@@ -105,17 +105,30 @@ shaped so the closure has to run TWICE: `RPTLIST` is fetched because GRPLIST nam
 One pipeline, each stage ignorant of the next. Mirrors `asm-dependencies` deliberately:
 
 ```
-lexer.py        physical text -> statements. TWO dialects, one module, because a deck's
-                dialect is not reliably declared:
+lexer.py        physical text -> statements. THREE dialects, one module, because a
+                deck's dialect is not reliably declared:
                   * CSD command syntax (DFHCSDUP): free-form to column 72, `*` comments,
                     and a statement that runs until the next COMMAND VERB - not until a
                     trailing comma, and emphatically not by indentation. `lex_csd` takes
                     the verb set, which is how BAS reuses it.
+                  * the CSD REPORT (`DFHCSDUP LIST ... OBJECTS` output, `lex_csd_report`):
+                    no command verb anywhere, an object introduced by its own type
+                    (`FILE(name)   GROUP(group)`), attributes indented under it, ASA
+                    carriage control in column 1, the report's print timestamp in the
+                    right margin, DFHCSDUP's messages around it. Emitted as DEFINE
+                    statements so everything downstream is the same code on the same
+                    shape. A whole-region CSD is far more often this than the deck that
+                    built it.
                   * assembler (macro table decks and BMS): columns 1-71, col-72
                     continuation resuming at col 16, an operand field ending at the first
                     blank outside quotes and parens.
-                NOT handled: a paginated DFHCSDUP EXTRACT / LIST REPORT, which is a
-                report rather than a deck. See "What is left".
+                The column-72 margin is decided PER SOURCE, not per line: content past
+                column 80 cannot be sitting on an 80-column card, so a file that has any
+                is read at full width and says so once (`margin_for`). Cutting such a file
+                at 72 threw away real attributes - a transaction's REMOTESYSTEM, a file's
+                STRINGS - and the cut then left an unclosed parenthesis that swallowed the
+                rest of the statement. The assembler dialect keeps its column 72, which is
+                a continuation INDICATOR rather than a sequence field.
 detect.py       which of the five kinds a source is, and where inside it the deck starts:
                 a CSD deck and a macro deck both arrive instream in a JCL job as often as
                 bare. BMS and macro decks are told apart by which macros they invoke,
@@ -389,6 +402,16 @@ rule lives entirely in output wording and has no other guard.
 `.gitattributes` pinning `eol=lf` is load-bearing here, not cosmetic - a CRLF checkout
 changes every hashed byte.
 
+**The artifacts view is authoritative for the region's flags**; the lineage view carries
+only the notes about its own rows. They used to be in both, overlapping without being
+identical, so every consumer merged and deduplicated two lists. A per-line flag family
+(one flag per offending source line) is aggregated by `views.aggregate_flags` into one
+flag carrying a count and a bounded sample - a 320,000-line member produced 482,849 flags,
+a transcript of the deck rather than a report about it - but a class seen ONCE keeps its
+own message, because most CSD members in an estate are extracts of a few lines. A
+`provides` row carries `incomplete` when its definition lost text, since a TRANSACTION
+whose `REMOTESYSTEM` was cut reads exactly like a local one.
+
 ## Honesty discipline
 
 Nothing is guessed. Anything unresolved is surfaced: a group named by a LIST that is not in
@@ -406,9 +429,12 @@ remains is not code:
    still written purely from the manuals. Every other path gave up defects the moment real
    source arrived - an HLASM remark, a `USAGE=MAP` mapset, a JCL-wrapped deck, a non-IBM
    macro prefix - and there is no reason these two are different.
-2. **A paginated `DFHCSDUP EXTRACT` REPORT**, as opposed to the DEFINE-shaped extract
-   CardDemo is. `detect.py` does not recognise it, and reading one as a deck loses rows
-   silently rather than failing.
+2. **A `DFHCSDUP EXTRACT` run through a user program.** `LIST ... OBJECTS` report output
+   is now read (`lex_csd_report`, batch-18 ledger item 48 - it was 94% of one estate's
+   CICS definitions and recovered nothing), but an EXTRACT emits whatever the user program
+   writes, which is by definition not a format. No public sample of either the paginated
+   form (page headers under ASA `1`) or a site's own EXTRACT program exists here; the
+   report reader is written against a real member's shape, described but not held.
 3. **A CSD-era SIT.** KICKS's SIT is real but macro-era and has no `GRPLIST`, so the
    install closure is still exercised only against fixtures written here.
 4. **Register the fourteen kinds upstream** once a corpus run shows which of them actually
