@@ -111,3 +111,23 @@ def test_the_example_recovers_every_object_it_lists():
     # Both answers a cut line destroys: which program runs, and where it is routed.
     assert (row["runs"], row["routedTo"]) == ("RPTMAIN", "RSYB")
     assert not any(r.get("incomplete") for r in provides(region))
+
+
+def test_a_capture_that_dropped_column_one_still_reads():
+    """The listing we were shown is a network-drive copy of a print file, and what a
+    PC-side transfer does to ASA carriage control is not something to assume. Read as data
+    the control character joins the first keyword; stripped when it was never there, every
+    object loses the first letter of its type. So the file decides, per file."""
+    stripped = "\n".join(line[1:] if line[:1] == " " else line
+                         for line in REPORT.splitlines()) + "\n"
+    region = _region(stripped)
+    assert [(r.kind, r.name) for r in region.resources] == [("TRANSACTION", "RPTA")]
+    assert region.resources[0].attributes["PROGRAM"] == "RPTMAIN"
+
+
+def test_a_capture_that_kept_no_trailer_is_still_a_listing():
+    """Whoever captured the member we were shown dropped the banner and command echo from
+    the head of each segment; a capture that drops the trailer too is as likely."""
+    body = "\n".join(line for line in REPORT.splitlines() if "DFH5" not in line) + "\n"
+    assert looks_like_csd_report(body)
+    assert [r.name for r in _region(body).resources] == ["RPTA"]
