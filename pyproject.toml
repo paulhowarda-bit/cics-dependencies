@@ -12,12 +12,14 @@ license = { text = "MIT" }
 authors = [{ name = "Paul Howard" }]
 keywords = ["cics", "csd", "mainframe", "modernization", "dependencies", "parser"]
 
-# Core ONLY - never cobol-xstate, never jcl-dependencies, never eztrieve-dependencies,
-# never asm-dependencies. The COBOL says what a program does, the JCL says which dataset a
-# batch ddname is, the Easytrieve says which bytes become which, the assembler says what a
-# module calls, and this says what the region wires those names to. Five peers that meet at
-# plain manifest dicts. tests/test_boundaries.py enforces it.
-dependencies = ["mainframe-artifacts>=0.1,<0.2"]
+# Core and the CICS reader ONLY - never cobol-xstate, never jcl-dependencies, never
+# eztrieve-dependencies, never asm-dependencies. The COBOL says what a program does, the JCL
+# says which dataset a batch ddname is, the Easytrieve says which bytes become which, the
+# assembler says what a module calls, and this says what the region wires those names to.
+# Five peers that meet at plain manifest dicts. tests/test_boundaries.py enforces it.
+# cics-parser is this package's own lexer and dialect decision, lifted into mainframe-common
+# so a second reader of the same members reads them with the same code.
+dependencies = ["mainframe-artifacts>=0.1,<0.2", "cics-parser>=0.1,<0.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
@@ -31,6 +33,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Put the src/ layout on sys.path so `python -m pytest` works without installing the
-# package (pytest >= 7). mainframe-artifacts arrives installed or via the sibling
-# mainframe-common checkout (tests/_mainframe_common.py; override MAINFRAME_COMMON_REPO).
+# package (pytest >= 7). mainframe-artifacts and cics-parser arrive installed or via the
+# sibling mainframe-common checkout (tests/_mainframe_common.py; override
+# MAINFRAME_COMMON_REPO).
 pythonpath = ["src", "tests"]

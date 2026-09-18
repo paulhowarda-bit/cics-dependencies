@@ -24,9 +24,11 @@ from _mainframe_common import CHECKOUT
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 # The child interpreters cannot inherit conftest's sys.path insertion, so they get the same
-# trees explicitly: this repo's src plus the sibling checkout's mainframe-artifacts (a
-# nonexistent path is inert - the pip-installed distribution carries the run then).
-_TREES = (str(CHECKOUT / "mainframe-artifacts" / "src"), str(SRC))
+# trees explicitly: this repo's src plus the sibling checkout's mainframe-artifacts and
+# cics-parser (a nonexistent path is inert - the pip-installed distribution carries the run
+# then).
+_TREES = (str(CHECKOUT / "mainframe-artifacts" / "src"), str(CHECKOUT / "cics-parser" / "src"),
+          str(SRC))
 
 _BLOCKED = ("cobol_xstate", "cobol_parser", "jcl_dependencies", "eztrieve_dependencies",
             "asm_dependencies")

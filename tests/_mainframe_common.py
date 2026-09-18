@@ -1,9 +1,9 @@
-"""Find mainframe-artifacts: installed, or in the sibling mainframe-common checkout.
+"""Find mainframe-artifacts and cics-parser: installed, or in the sibling checkout.
 
-This package's one dependency ships from the mainframe-common repository. Installed,
-it is simply importable. From a bare dual-checkout - that repo and this one side by
-side, nothing installed - its src goes on sys.path. Override the checkout location
-with MAINFRAME_COMMON_REPO.
+Both of this package's dependencies ship from the mainframe-common repository.
+Installed, they are simply importable. From a bare dual-checkout - that repo and this
+one side by side, nothing installed - each package's src goes on sys.path. Override the
+checkout location with MAINFRAME_COMMON_REPO.
 
 Shared by conftest.py (which ignores the suite when nothing is found) and the sentinel
 test module that reports the absence as ONE clean skip naming the exact pip command.
@@ -22,19 +22,27 @@ CHECKOUT = Path(os.environ.get(
     Path(__file__).resolve().parents[1].parent / "mainframe-common"))
 
 
+#: (package, the mainframe-common directory its distribution lives in)
+DISTRIBUTIONS = (("mainframe_artifacts", "mainframe-artifacts"),
+                 ("cics_parser", "cics-parser"))
+
+
 def ensure_on_path():
-    """Make mainframe_artifacts importable if possible; return None, or why not.
+    """Make both packages importable if possible; return None, or why not.
 
     The reason string names the exact pip command, because the failure has to be
     actionable from the message alone.
     """
-    if importlib.util.find_spec("mainframe_artifacts") is not None:
-        return None
-    src = CHECKOUT / "mainframe-artifacts" / "src"
-    if (src / "mainframe_artifacts" / "__init__.py").is_file():
-        sys.path.insert(0, str(src))
-        return None
-    return (f"mainframe_artifacts is neither installed nor found in a "
-            f"mainframe-common checkout at {CHECKOUT} - install it with "
-            f"`python -m pip install -e {CHECKOUT / 'mainframe-artifacts'}` "
-            f"(or set MAINFRAME_COMMON_REPO to a checkout)")
+    for package, tree in DISTRIBUTIONS:
+        if importlib.util.find_spec(package) is not None:
+            continue
+        src = CHECKOUT / tree / "src"
+        if (src / package / "__init__.py").is_file():
+            sys.path.insert(0, str(src))
+            continue
+        return (f"{package} is neither installed nor found in a mainframe-common "
+                f"checkout at {CHECKOUT} - install both distributions with "
+                f"`python -m pip install -e {CHECKOUT / 'mainframe-artifacts'} -e "
+                f"{CHECKOUT / 'cics-parser'}` (or set MAINFRAME_COMMON_REPO to a "
+                f"checkout)")
+    return None

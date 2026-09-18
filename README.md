@@ -23,16 +23,18 @@ pip install cics-dependencies
 ```
 
 It depends on `mainframe-artifacts` (the estate boundary and the two-stage dependency
-retrieval, shared with the COBOL, JCL, Easytrieve and assembler tools) and on nothing
-else. Pure Python standard library, Python >= 3.9.
+retrieval, shared with the COBOL, JCL, Easytrieve and assembler tools) and on
+`cics-parser` (the CICS reader itself: which dialect a member is, and its text ->
+statements - packaged apart so a second reader of the same members lexes them with the
+same code), and on nothing else. Pure Python standard library, Python >= 3.9.
 
-`mainframe-artifacts` ships from the
+Both ship from the
 [mainframe-common](https://github.com/paulhowarda-bit/mainframe-common) repository (one
-repo, several distributions; its `mainframe-artifacts/` subdirectory). Until it is on an
-index, install it straight from that repo:
+repo, several distributions; its `mainframe-artifacts/` and `cics-parser/`
+subdirectories). Until they are on an index, install them straight from that repo:
 
 ```bash
-pip install "mainframe-artifacts @ git+https://github.com/paulhowarda-bit/mainframe-common#subdirectory=mainframe-artifacts"
+pip install "mainframe-artifacts @ git+https://github.com/paulhowarda-bit/mainframe-common#subdirectory=mainframe-artifacts" "cics-parser @ git+https://github.com/paulhowarda-bit/mainframe-common#subdirectory=cics-parser"
 ```
 
 **It depends on none of `cobol-xstate`, `jcl-dependencies`, `eztrieve-dependencies` or
@@ -255,15 +257,17 @@ laid out, and the manifest says so rather than implying a mapping.
 ## Development
 
 ```bash
-# mainframe-artifacts comes from a sibling mainframe-common checkout (or the git+ line above)
-python -m pip install -e ../mainframe-common/mainframe-artifacts -e .
+# both dependencies come from a sibling mainframe-common checkout (or the git+ line above)
+python -m pip install -e ../mainframe-common/mainframe-artifacts     -e ../mainframe-common/cics-parser -e .
 python -m pytest -q
 ```
 
 From a bare dual-checkout — mainframe-common beside this repo, nothing installed — the
-suite finds `../mainframe-common/mainframe-artifacts` automatically (override with
-`MAINFRAME_COMMON_REPO`); without either, the run ends as one clean skip naming the exact
-pip command.
+suite finds `../mainframe-common/mainframe-artifacts` and `../mainframe-common/cics-parser`
+automatically (override with `MAINFRAME_COMMON_REPO`); without them, the run ends as one
+clean skip naming the exact pip command. The lexer's own tests live with it, in
+mainframe-common; the byte ratchet below is still the check that a change to the reader
+moved nothing here.
 
 Output will be byte-stable and deterministic once there is output: `tools/byteproof.py`
 joins the repo with the first view.

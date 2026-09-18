@@ -26,12 +26,15 @@ weight.
 
 ## Setup
 
-The one dependency, `mainframe-artifacts`, ships from the **mainframe-common** repository
-and is normally a sibling checkout rather than an install:
+Both dependencies ship from the **mainframe-common** repository and are normally a
+sibling checkout rather than an install: `mainframe-artifacts` (the estate boundary) and
+`cics-parser` (this package's own lexer and dialect decision, lifted out so a second
+reader of the same members reads them with the same code):
 
 ```
 code/
-  mainframe-common/mainframe-artifacts/    <- the dependency
+  mainframe-common/mainframe-artifacts/    <- dependency
+  mainframe-common/cics-parser/            <- dependency (lexer.py, the dialect half of detect.py)
   jcl-dependencies/                        <- peer (region JCL, the DFHSIP job)
   asm-dependencies/                        <- peer (EXEC CICS in assembler)
   cobol-xstate-json/                       <- peer (EXEC CICS in COBOL)
@@ -39,7 +42,7 @@ code/
   cics-dependencies/                       <- here
 ```
 
-`tests/_mainframe_common.py` puts the sibling's `src` on `sys.path` when the distribution
+`tests/_mainframe_common.py` puts each sibling `src` on `sys.path` when its distribution
 is not installed; override with `MAINFRAME_COMMON_REPO`. When neither is found,
 `tests/conftest.py` ignores every module except `test_sibling_distribution.py`, so the run
 ends as one clean skip naming the pip command.
@@ -76,8 +79,8 @@ on one seed and different on the next, and a single-seed record captures whichev
 or the path is given explicitly — note `;` is the separator on Windows, `:` elsewhere:
 
 ```bash
-python -m pip install -e ../mainframe-common/mainframe-artifacts -e .
-export PYTHONPATH="src;tests;../mainframe-common/mainframe-artifacts/src"
+python -m pip install -e ../mainframe-common/mainframe-artifacts     -e ../mainframe-common/cics-parser -e .
+export PYTHONPATH="src;tests;../mainframe-common/mainframe-artifacts/src;../mainframe-common/cics-parser/src"
 ```
 
 Then (`--no-fetch` because the real estate client is not installed here):
@@ -105,7 +108,11 @@ shaped so the closure has to run TWICE: `RPTLIST` is fetched because GRPLIST nam
 One pipeline, each stage ignorant of the next. Mirrors `asm-dependencies` deliberately:
 
 ```
-lexer.py        physical text -> statements. THREE dialects, one module, because a
+lexer.py        a re-export shim: the lexer LIVES in cics-parser (mainframe-common,
+                `cics_parser.lexer`), so a second reader of the same members lexes them
+                with this code rather than a grammar of its own. Change it there - and run
+                this repo's byteproof after, because that is where its output is ratcheted.
+                physical text -> statements. THREE dialects, one module, because a
                 deck's dialect is not reliably declared:
                   * CSD command syntax (DFHCSDUP): free-form to column 72, `*` comments,
                     and a statement that runs until the next COMMAND VERB - not until a
@@ -132,7 +139,10 @@ lexer.py        physical text -> statements. THREE dialects, one module, because
 detect.py       which of the five kinds a source is, and where inside it the deck starts:
                 a CSD deck and a macro deck both arrive instream in a JCL job as often as
                 bare. BMS and macro decks are told apart by which macros they invoke,
-                never by suffix - both are assembler with a label in column 1.
+                never by suffix - both are assembler with a label in column 1. The first
+                half (`source_kind`, `looks_like_csd_report`, the KIND_ constants) lives in
+                `cics_parser.detect` and is re-exported; the JCL wrapper strip is this
+                package's own.
 csd.py          DEFINE / ADD / COPY / APPEND / REMOVE / LIST -> Resource objects
 tables.py       DFHPCT / DFHPPT / DFHFCT / DFHDCT / DFHTCT / DFHTST / DFHPLT / DFHXLT /
                 DSNCRCT -> the SAME Resource objects

@@ -1,13 +1,13 @@
-"""The macro table era, and the assembler lexer under it.
+"""The macro table era.
 
 NOT validated against real source. There is no public corpus of DFHPCT/DFHFCT decks, so
 ``examples/legacy.pct`` is written from IBM's macro documentation and proves only that this
 code does what it was built to do - unlike the CSD path, which has AWS CardDemo behind it.
+The assembler lexer under it moved to cics-parser (mainframe-common), and its tests with it.
 """
 
 from pathlib import Path
 
-from cics_dependencies.lexer import lex_macro
 from cics_dependencies.model import SOURCE_MACRO
 from cics_dependencies.tables import parse_tables
 
@@ -17,52 +17,6 @@ DECK = (REPO / "examples" / "legacy.pct").read_text(encoding="utf-8")
 
 def _only(region, kind, name):
     return next(r for r in region.resources if r.kind == kind and r.name == name)
-
-
-# --------------------------------------------------------------------------- #
-# the lexer
-# --------------------------------------------------------------------------- #
-
-def test_a_continuation_resumes_at_column_16():
-    first = "         DFHPCT TYPE=ENTRY,TRANSID=LGMN,".ljust(71) + "X"
-    second = "               PROGRAM=LGMENU"
-    stmts, flags = lex_macro(first + "\n" + second + "\n")
-    assert len(stmts) == 1
-    assert stmts[0].first("PROGRAM") == "LGMENU"
-    assert flags == []
-
-
-def test_a_continuation_mark_that_missed_column_72_is_flagged():
-    """The classic hand-edited-deck failure, and it is silent: the mark is past the margin
-    so nothing continues, the next line is read as a fresh statement, its operation is not
-    a known macro, and every operand on it disappears. This repository's own first draft of
-    legacy.pct had its X in column 74."""
-    first = "         DFHPCT TYPE=ENTRY,TRANSID=LGMN,".ljust(73) + "X"
-    stmts, flags = lex_macro(first + "\n               PROGRAM=LGMENU\n")
-    assert any("column 72 itself is blank" in f for f in flags)
-    assert stmts[0].first("PROGRAM") is None
-
-
-def test_a_parenthesised_value_is_one_operand():
-    """ACCMETH=(VSAM,KSDS) and SERVREQ=(GET,PUT) contain the comma that separates
-    operands. Split naively, one file definition becomes four nonsense ones."""
-    stmts, _ = lex_macro(
-        "         DFHFCT TYPE=DATASET,DATASET=CUSTMAS,ACCMETH=(VSAM,KSDS)\n")
-    assert stmts[0].first("ACCMETH") == "(VSAM,KSDS)"
-    assert stmts[0].first("DATASET") == "CUSTMAS"
-
-
-def test_conditional_assembly_is_flagged_not_evaluated():
-    """A table deck inside an AIF is the &SYSPARM problem. Deciding it here would model a
-    deck that never assembles."""
-    _, flags = lex_macro("         AIF   ('&SYSPARM' EQ 'PROD').PROD\n")
-    assert any("conditional assembly" in f for f in flags)
-
-
-def test_a_label_in_column_one_is_the_statement_name():
-    stmts, _ = lex_macro("DFHPCTL1 DFHPCT TYPE=INITIAL,SUFFIX=L1\n")
-    assert stmts[0].label == "DFHPCTL1"
-    assert stmts[0].operation == "DFHPCT"
 
 
 # --------------------------------------------------------------------------- #
