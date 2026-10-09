@@ -130,7 +130,10 @@ view of the CICS startup job. On a CSD-era estate that is corroboration; on a ma
 it is the only route, since a `DFHFCT` entry carries no DSNAME at all. It sorts every DD on
 the `DFHSIP` step into three: CICS's own (the CSD, DFHRPL, the trace and TS/TD datasets), a
 file or queue definition it binds, or a DD that matches nothing — reported as a finding,
-because that is either a macro-era file whose deck was not supplied or dead JCL.
+because that is either a macro-era file whose deck was not supplied or dead JCL. A
+concatenated DD (DFHRPL nearly always is one) arrives as one binding per dataset: every
+one is reported with its `concatIndex`, and each is compared with what the definition
+says, never with the dataset the same DD bound a line earlier.
 
 All four outputs are byte-locked by `tools/byteproof.py`, which the suite runs under two
 `PYTHONHASHSEED` values.

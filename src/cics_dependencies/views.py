@@ -359,6 +359,11 @@ def bind_jcl_region(region: Region, jcl_lineage: dict, *,
     datasets, DFHRPL); it matches a FILE definition or a TDQUEUE's DDNAME; or it matches
     nothing, which is a finding rather than an error - a DD with no definition is either a
     macro-era file whose deck was not supplied, or dead JCL.
+
+    A concatenated DD (DFHRPL nearly always is one) arrives as one binding per dataset,
+    each carrying its ``concatIndex``, and every one of them is reported. The datasets of
+    one DD are not rival statements about each other: each is compared with what the
+    DEFINITION says, never with the dataset the same DD bound a line earlier.
     """
     bindings = [b for b in jcl_lineage.get("ddBindings") or []
                 if (step is None and b.get("program") == REGION_PROGRAM)
@@ -380,37 +385,51 @@ def bind_jcl_region(region: Region, jcl_lineage: dict, *,
     system: List[dict] = []
     bound: List[dict] = []
     unmatched: List[dict] = []
+    # Per DD - (step, ddname) - the references it has bound so far, and whether it matched
+    # nothing: a concatenated DD is several bindings and still one DD statement group.
+    from_this_dd: Dict[Tuple[Optional[str], str], List[Reference]] = {}
+    unmatched_dds: Dict[Tuple[Optional[str], str], None] = {}
 
     for binding in bindings:
         ddname, dataset = binding.get("ddname"), binding.get("dataset")
         if not ddname:
             continue
+        this_dd = (binding.get("step"), ddname)
+        row = {"ddname": ddname}
+        if binding.get("concatIndex"):
+            row["concatIndex"] = binding["concatIndex"]
+        row["dataset"] = dataset
         if ddname in _SYSTEM_DD:
-            system.append({"ddname": ddname, "dataset": dataset,
-                           "role": _SYSTEM_DD[ddname]})
+            system.append({**row, "role": _SYSTEM_DD[ddname]})
             continue
 
         res = files.get(ddname) or by_ddname.get(ddname)
         if res is None:
             unmatched.append({
-                "ddname": ddname, "dataset": dataset,
+                **row,
                 "reason": "no FILE definition of this name, and no TDQUEUE naming it as a "
                           "DDNAME. Either the group that defines it was not supplied, or "
                           "the region defines it in a macro-era FCT, or the DD is dead"})
+            unmatched_dds[this_dd] = None
             continue
 
         # A `file`-kind DDNAME row is a name awaiting a dataset, so it never counts as an
-        # existing binding - only a real DSNAME does.
-        existing = next((r for r in res.references if r.kind == "dataset"), None)
+        # existing binding - only a real DSNAME does. Nor does a dataset this same DD
+        # bound from an earlier position of its own concatenation.
+        mine = from_this_dd.setdefault(this_dd, [])
+        existing = next((r for r in res.references
+                         if r.kind == "dataset" and not any(r is m for m in mine)), None)
         if existing is None:
-            res.references.append(Reference(
+            ref = Reference(
                 field="DDNAME", name=dataset or "", kind="dataset", relation="binds",
                 evidence=EVIDENCE_LITERAL,
                 io=permitted_io(res.attributes) if res.kind == "FILE" else None,
                 note="bound from the %s DD on the region startup job - the definition "
                      "itself carries no DSNAME, which is normal for a macro-era FCT"
-                     % ddname))
-            bound.append({"ddname": ddname, "dataset": dataset, "resource": res.name,
+                     % ddname)
+            res.references.append(ref)
+            mine.append(ref)
+            bound.append({**row, "resource": res.name,
                           "resourceType": res.kind, "via": "the region startup JCL"})
         elif dataset and existing.name != dataset:
             res.flags.append(
@@ -418,11 +437,11 @@ def bind_jcl_region(region: Region, jcl_lineage: dict, *,
                 "Both are reported and neither is preferred - which one the region runs "
                 "with depends on which of these sources is current"
                 % (ddname, dataset, existing.name))
-            bound.append({"ddname": ddname, "dataset": dataset, "resource": res.name,
+            bound.append({**row, "resource": res.name,
                           "resourceType": res.kind, "via": "the region startup JCL",
                           "disagreesWith": existing.name})
         else:
-            bound.append({"ddname": ddname, "dataset": dataset, "resource": res.name,
+            bound.append({**row, "resource": res.name,
                           "resourceType": res.kind, "via": "corroborated - the DD and the "
                                                            "definition agree"})
 
@@ -432,8 +451,8 @@ def bind_jcl_region(region: Region, jcl_lineage: dict, *,
     if unmatched:
         region.flags.append(
             "%d DD statement(s) on the %s step match no definition in these sources: %s"
-            % (len(unmatched), REGION_PROGRAM,
-               ", ".join(u["ddname"] for u in unmatched)))
+            % (len(unmatched_dds), REGION_PROGRAM,
+               ", ".join(ddname for _, ddname in unmatched_dds)))
     return region
 
 

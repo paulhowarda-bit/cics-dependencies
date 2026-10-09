@@ -108,3 +108,55 @@ def test_the_bound_dataset_reaches_the_manifest(region):
     manifest = build_cics_artifacts(region)
     names = {row["artifact"] for row in manifest["artifacts"] if row["kind"] == "dataset"}
     assert "PROD.APP.REPORT" in names
+
+
+def _concatenated_lineage():
+    """The shape jcl-dependencies publishes for a concatenated DD: one binding per
+    dataset, in read order, each carrying its 1-based ``concatIndex``."""
+    def dd(ddname, *datasets):
+        return [{"program": "DFHSIP", "step": "CICS", "ddname": ddname,
+                 "concatIndex": n, "dataset": d} for n, d in enumerate(datasets, start=1)]
+    return {"job": "CICSJOB", "ddBindings": (
+        dd("DFHRPL", "PROD.APP.LOADLIB", "CICSTS.SDFHLOAD")
+        + dd("EXTRACT", "PROD.EXTRACT.A", "PROD.EXTRACT.B")
+        + dd("NODEF", "PROD.NODEF.A", "PROD.NODEF.B"))}
+
+
+def test_every_dataset_of_a_concatenated_dd_is_reported_in_order():
+    """The second dataset of a concatenation used to be read as DISAGREEING with the
+    first - which this same DD had bound one line earlier."""
+    region = parse_csd(" DEFINE FILE(EXTRACT) GROUP(G) READ(YES)\n")
+    bind_jcl_region(region, _concatenated_lineage())
+    assert [(d["ddname"], d["concatIndex"], d["dataset"])
+            for d in region.jcl["systemDatasets"]] == [
+        ("DFHRPL", 1, "PROD.APP.LOADLIB"), ("DFHRPL", 2, "CICSTS.SDFHLOAD")]
+    bound = [b for b in region.jcl["bound"] if b["ddname"] == "EXTRACT"]
+    assert [(b["concatIndex"], b["dataset"]) for b in bound] == [
+        (1, "PROD.EXTRACT.A"), (2, "PROD.EXTRACT.B")]
+    assert not any("disagreesWith" in b for b in bound)
+    assert region.resources[0].flags == []
+    assert [r.name for r in region.resources[0].references if r.kind == "dataset"] == [
+        "PROD.EXTRACT.A", "PROD.EXTRACT.B"]
+
+
+def test_a_concatenated_dd_matching_nothing_is_one_unmatched_dd():
+    region = parse_csd(" DEFINE FILE(EXTRACT) GROUP(G) READ(YES)\n")
+    bind_jcl_region(region, _concatenated_lineage())
+    assert [(u["ddname"], u["concatIndex"]) for u in region.jcl["unmatched"]] == [
+        ("NODEF", 1), ("NODEF", 2)]
+    flag = next(f for f in region.flags if "match no definition" in f)
+    assert flag.startswith("1 DD statement(s)") and flag.endswith(": NODEF")
+
+
+def test_a_concatenation_is_compared_with_the_definition_not_with_itself():
+    region = parse_csd(" DEFINE FILE(EXTRACT) GROUP(G) DSNAME(PROD.EXTRACT.A)\n"
+                       "        READ(YES)\n")
+    bind_jcl_region(region, _concatenated_lineage())
+    first, second = [b for b in region.jcl["bound"] if b["ddname"] == "EXTRACT"]
+    assert "corroborated" in first["via"]
+    assert second["disagreesWith"] == "PROD.EXTRACT.A"
+
+
+def test_a_dd_of_one_statement_carries_no_concat_index(region):
+    assert not any("concatIndex" in row for key in ("systemDatasets", "bound", "unmatched")
+                   for row in region.jcl[key])
